@@ -28,6 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(TestcontainersConfiguration.class)
 class ImportJobIT {
 
+    private static final String SPANISH = "ES9121000418450200051332_2026-09.csv";
+    private static final String BRITISH = "GB33BUKB20201555555555_2026-09.csv";
+
     @Autowired
     JobOperator jobOperator;
 
@@ -40,10 +43,10 @@ class ImportJobIT {
     @Autowired
     JdbcClient jdbc;
 
-    JobOperatorTestUtils jobs;
-
     @TempDir
     Path inbox;
+
+    JobOperatorTestUtils jobs;
 
     @BeforeEach
     void setUp() {
@@ -54,12 +57,14 @@ class ImportJobIT {
 
     @Test
     void importsASpanishStatementSkippingInvalidLines() throws Exception {
-        JobExecution execution = importFile(sample("ES9121000418450200051332_2026-09.csv"));
+        copySample(SPANISH);
+
+        JobExecution execution = importInbox();
 
         assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-        StepExecution step = execution.getStepExecutions().iterator().next();
-        assertThat(step.getWriteCount()).isEqualTo(25);
-        assertThat(step.getSkipCount()).isEqualTo(2);
+        StepExecution worker = workerStep(execution, SPANISH);
+        assertThat(worker.getWriteCount()).isEqualTo(25);
+        assertThat(worker.getSkipCount()).isEqualTo(2);
         assertThat(count("SELECT count(*) FROM bank_transactions WHERE account_id = 'ES9121000418450200051332'"))
                 .isEqualTo(25);
         assertThat(jdbc.sql("SELECT reason FROM import_errors ORDER BY line_number").query(String.class).list())
@@ -67,8 +72,25 @@ class ImportJobIT {
     }
 
     @Test
+    void importsEveryFileOfTheDirectoryInItsOwnPartition() throws Exception {
+        copySample(SPANISH);
+        copySample(BRITISH);
+
+        JobExecution execution = importInbox();
+
+        assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        assertThat(execution.getStepExecutions())
+                .extracting(StepExecution::getStepName)
+                .containsExactlyInAnyOrder("importStatements", "importStatementFile:file0", "importStatementFile:file1");
+        assertThat(count("SELECT count(DISTINCT account_id) FROM bank_transactions")).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM bank_transactions")).isEqualTo(25 + 22);
+    }
+
+    @Test
     void keepsIdenticalMovementsOnTheSameDay() throws Exception {
-        importFile(sample("ES9121000418450200051332_2026-09.csv"));
+        copySample(SPANISH);
+
+        importInbox();
 
         assertThat(count("SELECT count(*) FROM bank_transactions WHERE description = 'CAFETERIA EL RINCON'"))
                 .isEqualTo(2);
@@ -76,7 +98,9 @@ class ImportJobIT {
 
     @Test
     void categorisesWhileImporting() throws Exception {
-        importFile(sample("GB33BUKB20201555555555_2026-09.csv"));
+        copySample(BRITISH);
+
+        importInbox();
 
         assertThat(jdbc.sql("SELECT category FROM bank_transactions WHERE description = 'SALARY ACME LTD'")
                 .query(String.class).single()).isEqualTo("INCOME");
@@ -86,34 +110,45 @@ class ImportJobIT {
 
     @Test
     void reimportingTheSameStatementAddsNothing() throws Exception {
-        Path file = sample("GB33BUKB20201555555555_2026-09.csv");
-        importFile(file);
+        copySample(BRITISH);
+        importInbox();
 
-        JobExecution second = importFile(file);
+        JobExecution second = importInbox();
 
-        StepExecution step = second.getStepExecutions().iterator().next();
         assertThat(second.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-        assertThat(step.getExecutionContext().getLong(BankTransactionWriter.DUPLICATES_KEY)).isEqualTo(22);
+        assertThat(workerStep(second, BRITISH).getExecutionContext().getLong(BankTransactionWriter.DUPLICATES_KEY))
+                .isEqualTo(22);
         assertThat(count("SELECT count(*) FROM bank_transactions")).isEqualTo(22);
     }
 
     @Test
-    void failsOnUnknownFormats() throws Exception {
-        Path file = inbox.resolve("ES9121000418450200051332_unknown.csv");
-        Files.writeString(file, "id,amount\n1,10.00\n");
+    void anUnknownFormatFailsOnlyThatFile() throws Exception {
+        copySample(BRITISH);
+        Files.writeString(inbox.resolve("ES9121000418450200051332_unknown.csv"), "id,amount\n1,10.00\n");
 
-        assertThat(importFile(file).getStatus()).isEqualTo(BatchStatus.FAILED);
+        JobExecution execution = importInbox();
+
+        assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(count("SELECT count(*) FROM bank_transactions")).isEqualTo(22);
     }
 
-    private JobExecution importFile(Path file) throws Exception {
+    private JobExecution importInbox() throws Exception {
         JobParameters parameters = jobs.getUniqueJobParametersBuilder()
-                .addString(ImportJobConfig.INPUT_FILE, file.toString())
+                .addString(ImportJobConfig.INPUT_DIRECTORY, inbox.toString())
                 .toJobParameters();
         return jobs.startJob(parameters);
     }
 
-    private Path sample(String name) throws IOException {
-        return Files.copy(Path.of("samples", name), inbox.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+    private static StepExecution workerStep(JobExecution execution, String fileName) {
+        return execution.getStepExecutions().stream()
+                .filter(step -> step.getExecutionContext().getString(StatementFilesPartitioner.INPUT_FILE, "")
+                        .endsWith(fileName))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private void copySample(String name) throws IOException {
+        Files.copy(Path.of("samples", name), inbox.resolve(name), StandardCopyOption.REPLACE_EXISTING);
     }
 
     private long count(String sql) {

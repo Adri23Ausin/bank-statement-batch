@@ -19,32 +19,55 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * {@code importStatementsJob}: reads a bank statement, categorises every line and stores it,
- * skipping (and recording) the lines that can't be parsed.
+ * {@code importStatementsJob}: imports every statement file of a directory. Each file is a
+ * partition processed in parallel by the {@code importStatementFile} worker step, which reads,
+ * categorises and stores its lines, skipping (and recording) the ones that can't be parsed.
  */
 @Configuration(proxyBeanMethods = false)
 public class ImportJobConfig {
 
     public static final String JOB_NAME = "importStatementsJob";
-    public static final String INPUT_FILE = "inputFile";
+    public static final String INPUT_DIRECTORY = "inputDirectory";
 
     static final int CHUNK_SIZE = 500;
     static final int SKIP_LIMIT = 100;
+    static final int MAX_PARALLEL_FILES = 4;
 
     @Bean
-    Job importStatementsJob(JobRepository jobRepository, Step importStatementFile, ImportSummaryListener summary) {
+    Job importStatementsJob(JobRepository jobRepository, Step importStatements, ImportSummaryListener summary) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 // No incrementer: in Spring Batch 6 it would replace the parameters given at launch.
                 // Callers add a unique parameter (e.g. the launch time) to start a new instance.
-                .validator(new DefaultJobParametersValidator(new String[] {INPUT_FILE}, new String[0]))
+                .validator(new DefaultJobParametersValidator(new String[] {INPUT_DIRECTORY}, new String[0]))
                 .listener(summary)
-                .start(importStatementFile)
+                .start(importStatements)
                 .build();
+    }
+
+    @Bean
+    Step importStatements(JobRepository jobRepository, Step importStatementFile,
+                          StatementFilesPartitioner statementFilesPartitioner) {
+        SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor("import-");
+        executor.setVirtualThreads(true);
+        executor.setConcurrencyLimit(MAX_PARALLEL_FILES);
+        return new StepBuilder("importStatements", jobRepository)
+                .partitioner("importStatementFile", statementFilesPartitioner)
+                .step(importStatementFile)
+                .taskExecutor(executor)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    StatementFilesPartitioner statementFilesPartitioner(
+            @Value("#{jobParameters['inputDirectory']}") String inputDirectory) {
+        return new StatementFilesPartitioner(Path.of(inputDirectory));
     }
 
     @Bean
@@ -72,7 +95,7 @@ public class ImportJobConfig {
 
     @Bean
     @StepScope
-    FlatFileItemReader<ParsedLine> statementReader(@Value("#{jobParameters['inputFile']}") String inputFile) {
+    FlatFileItemReader<ParsedLine> statementReader(@Value("#{stepExecutionContext['inputFile']}") String inputFile) {
         StatementFile file = StatementFile.open(Path.of(inputFile));
         return new FlatFileItemReaderBuilder<ParsedLine>()
                 .name("statementReader")
@@ -85,7 +108,7 @@ public class ImportJobConfig {
 
     @Bean
     @StepScope
-    BankTransactionProcessor bankTransactionProcessor(@Value("#{jobParameters['inputFile']}") String inputFile,
+    BankTransactionProcessor bankTransactionProcessor(@Value("#{stepExecutionContext['inputFile']}") String inputFile,
                                                       TransactionCategorizer categorizer, Clock clock) {
         return new BankTransactionProcessor(StatementFile.open(Path.of(inputFile)), categorizer, clock);
     }
@@ -98,7 +121,7 @@ public class ImportJobConfig {
 
     @Bean
     @StepScope
-    ImportErrorRecorder importErrorRecorder(@Value("#{jobParameters['inputFile']}") String inputFile,
+    ImportErrorRecorder importErrorRecorder(@Value("#{stepExecutionContext['inputFile']}") String inputFile,
                                             JdbcClient jdbc) {
         return new ImportErrorRecorder(jdbc, Path.of(inputFile).getFileName().toString());
     }
