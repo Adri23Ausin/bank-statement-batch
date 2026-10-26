@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +32,9 @@ public sealed interface StatementFormat permits StatementFormat.IberBank, Statem
     record IberBank() implements StatementFormat {
 
         private static final String HEADER = "Fecha;Concepto;Importe;Divisa;Saldo";
-        private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/uuuu");
+        // STRICT: the default resolver would silently turn 31/09 into 30/09
+        private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/uuuu")
+                .withResolverStyle(ResolverStyle.STRICT);
 
         @Override
         public String name() {

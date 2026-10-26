@@ -49,6 +49,7 @@ class StatementFormatTest {
         @ParameterizedTest
         @ValueSource(strings = {
                 "2026-09-28;COMPRA;-10,00;EUR;0,00",
+                "31/09/2026;FECHA IMPOSIBLE;-10,00;EUR;0,00",
                 "28/09/2026;COMPRA;diez;EUR;0,00",
                 "28/09/2026;;-10,00;EUR;0,00",
                 "28/09/2026;COMPRA;-10,00;EUR",
