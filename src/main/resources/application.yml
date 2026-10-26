@@ -15,8 +15,26 @@ spring:
     jdbc:
       # The Spring Batch schema is managed by Flyway (V1 migration)
       initialize-schema: never
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
 
 statements:
+  inbox:
+    directory: ${INBOX_DIR:inbox}
+    # Import CSV files dropped straight into the inbox directory
+    polling-enabled: ${INBOX_POLLING:false}
+    poll-interval: 1m
   reports:
     directory: ${REPORTS_DIR:reports}
   categorization:

@@ -1,4 +1,6 @@
 # Merged on top of the main application.yml when running tests
 statements:
+  inbox:
+    directory: target/test-inbox
   reports:
     directory: target/test-reports
