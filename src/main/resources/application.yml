@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: bank-statement-batch
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/statements}
+    username: ${DB_USERNAME:statements}
+    password: ${DB_PASSWORD:statements}
+  batch:
+    job:
+      # Jobs are launched explicitly (REST API or scheduler), never at startup
+      enabled: false
+    jdbc:
+      # The Spring Batch schema is managed by Flyway (V1 migration)
+      initialize-schema: never
