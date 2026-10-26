@@ -15,3 +15,21 @@ spring:
     jdbc:
       # The Spring Batch schema is managed by Flyway (V1 migration)
       initialize-schema: never
+
+statements:
+  categorization:
+    # First match wins, so specific rules go before generic ones
+    rules:
+      - { category: INCOME, pattern: "\\b(NOMINA|SALARY|PAYROLL)\\b", direction: IN }
+      - { category: SAVINGS, pattern: "TRANSFER(ENCIA)? (A|TO) (AHORRO|SAVINGS)" }
+      - { category: HOUSING, pattern: "\\b(ALQUILER|RENT|HIPOTECA|MORTGAGE)\\b" }
+      - { category: UTILITIES, pattern: "IBERDROLA|ENDESA|NATURGY|BRITISH GAS|MOVISTAR|VODAFONE|\\bEE MOBILE\\b|\\bO2\\b" }
+      - { category: INSURANCE, pattern: "SEGURO|INSURANCE|MAPFRE|AXA\\b" }
+      - { category: TAXES, pattern: "COUNCIL TAX|HMRC|AGENCIA TRIBUTARIA|\\bIBI\\b" }
+      - { category: SUBSCRIPTIONS, pattern: "NETFLIX|SPOTIFY|DISNEY|HBO|GIMNASIO|\\bGYM\\b|BASIC FIT" }
+      - { category: GROCERIES, pattern: "MERCADONA|CARREFOUR|LIDL|ALDI|DIA %|TESCO|SAINSBURY|WAITROSE" }
+      - { category: RESTAURANTS, pattern: "RESTAURANTE|CAFETERIA|BAR |PUB\\b|PRET A MANGER|DELIVEROO|JUST EAT|GLOVO" }
+      - { category: TRANSPORT, pattern: "RENFE|REPSOL|CEPSA|\\bBP\\b|UBER|CABIFY|\\bTFL\\b|TRAINLINE" }
+      - { category: HEALTH, pattern: "FARMACIA|PHARMACY|BOOTS|CLINICA|DENTAL" }
+      - { category: CASH, pattern: "CAJERO|\\bATM\\b|CASH WITHDRAWAL" }
+      - { category: SHOPPING, pattern: "AMAZON|ZARA|EL CORTE INGLES|IKEA|PRIMARK" }
