@@ -25,9 +25,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * {@code importStatementsJob}: imports every statement file of a directory. Each file is a
- * partition processed in parallel by the {@code importStatementFile} worker step, which reads,
- * categorises and stores its lines, skipping (and recording) the ones that can't be parsed.
+ * {@code importStatementsJob}:
+ * <ol>
+ *     <li>{@code importStatements}: imports every statement file of a directory. Each file is a
+ *     partition processed in parallel by the {@code importStatementFile} worker step, which reads,
+ *     categorises and stores its lines, skipping (and recording) the ones that can't be parsed;</li>
+ *     <li>{@code reconcilePayments}: matches expected payments with the imported transactions.</li>
+ * </ol>
  */
 @Configuration(proxyBeanMethods = false)
 public class ImportJobConfig {
@@ -40,13 +44,15 @@ public class ImportJobConfig {
     static final int MAX_PARALLEL_FILES = 4;
 
     @Bean
-    Job importStatementsJob(JobRepository jobRepository, Step importStatements, ImportSummaryListener summary) {
+    Job importStatementsJob(JobRepository jobRepository, Step importStatements, Step reconcilePayments,
+                            ImportSummaryListener summary) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 // No incrementer: in Spring Batch 6 it would replace the parameters given at launch.
                 // Callers add a unique parameter (e.g. the launch time) to start a new instance.
                 .validator(new DefaultJobParametersValidator(new String[] {INPUT_DIRECTORY}, new String[0]))
                 .listener(summary)
                 .start(importStatements)
+                .next(reconcilePayments)
                 .build();
     }
 

@@ -50,7 +50,7 @@ class ImportJobIT {
 
     @BeforeEach
     void setUp() {
-        jdbc.sql("TRUNCATE bank_transactions, import_errors").update();
+        jdbc.sql("TRUNCATE expected_payments, bank_transactions, import_errors").update();
         jobs = new JobOperatorTestUtils(jobOperator, jobRepository);
         jobs.setJob(importStatementsJob);
     }
@@ -81,7 +81,8 @@ class ImportJobIT {
         assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
         assertThat(execution.getStepExecutions())
                 .extracting(StepExecution::getStepName)
-                .containsExactlyInAnyOrder("importStatements", "importStatementFile:file0", "importStatementFile:file1");
+                .containsExactlyInAnyOrder("importStatements", "importStatementFile:file0", "importStatementFile:file1",
+                        "reconcilePayments");
         assertThat(count("SELECT count(DISTINCT account_id) FROM bank_transactions")).isEqualTo(2);
         assertThat(count("SELECT count(*) FROM bank_transactions")).isEqualTo(25 + 22);
     }
