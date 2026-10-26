@@ -82,7 +82,7 @@ class ImportJobIT {
         assertThat(execution.getStepExecutions())
                 .extracting(StepExecution::getStepName)
                 .containsExactlyInAnyOrder("importStatements", "importStatementFile:file0", "importStatementFile:file1",
-                        "reconcilePayments");
+                        "reconcilePayments", "writeMonthlyReports");
         assertThat(count("SELECT count(DISTINCT account_id) FROM bank_transactions")).isEqualTo(2);
         assertThat(count("SELECT count(*) FROM bank_transactions")).isEqualTo(25 + 22);
     }

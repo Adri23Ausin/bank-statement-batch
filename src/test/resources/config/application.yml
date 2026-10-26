@@ -1,0 +1,4 @@
+# Merged on top of the main application.yml when running tests
+statements:
+  reports:
+    directory: target/test-reports

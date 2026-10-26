@@ -30,7 +30,8 @@ import org.springframework.transaction.PlatformTransactionManager;
  *     <li>{@code importStatements}: imports every statement file of a directory. Each file is a
  *     partition processed in parallel by the {@code importStatementFile} worker step, which reads,
  *     categorises and stores its lines, skipping (and recording) the ones that can't be parsed;</li>
- *     <li>{@code reconcilePayments}: matches expected payments with the imported transactions.</li>
+ *     <li>{@code reconcilePayments}: matches expected payments with the imported transactions;</li>
+ *     <li>{@code writeMonthlyReports}: rewrites the reports of the months that received new data.</li>
  * </ol>
  */
 @Configuration(proxyBeanMethods = false)
@@ -45,7 +46,7 @@ public class ImportJobConfig {
 
     @Bean
     Job importStatementsJob(JobRepository jobRepository, Step importStatements, Step reconcilePayments,
-                            ImportSummaryListener summary) {
+                            Step writeMonthlyReports, ImportSummaryListener summary) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 // No incrementer: in Spring Batch 6 it would replace the parameters given at launch.
                 // Callers add a unique parameter (e.g. the launch time) to start a new instance.
@@ -53,6 +54,7 @@ public class ImportJobConfig {
                 .listener(summary)
                 .start(importStatements)
                 .next(reconcilePayments)
+                .next(writeMonthlyReports)
                 .build();
     }
 
