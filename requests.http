@@ -1,0 +1,41 @@
+### Register payments we expect to see in the statement
+POST http://localhost:8080/api/v1/expected-payments
+Content-Type: application/json
+
+{"accountId": "ES9121000418450200051332", "reference": "ALQ-2026-09", "description": "Rent", "amount": -950.00, "dueDate": "2026-09-01"}
+
+###
+POST http://localhost:8080/api/v1/expected-payments
+Content-Type: application/json
+
+{"accountId": "ES9121000418450200051332", "reference": "WATER-2026-09", "description": "Water bill", "amount": -31.50, "dueDate": "2026-09-10"}
+
+### Upload the sample statements (run from the project folder)
+POST http://localhost:8080/api/v1/imports
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="files"; filename="ES9121000418450200051332_2026-09.csv"
+Content-Type: text/csv
+
+< ./samples/ES9121000418450200051332_2026-09.csv
+--boundary
+Content-Disposition: form-data; name="files"; filename="GB33BUKB20201555555555_2026-09.csv"
+Content-Type: text/csv
+
+< ./samples/GB33BUKB20201555555555_2026-09.csv
+--boundary--
+
+> {% client.global.set("importId", response.body.importId); %}
+
+### Import status: per-file counts and skipped lines
+GET http://localhost:8080/api/v1/imports/{{importId}}
+
+### Monthly report
+GET http://localhost:8080/api/v1/accounts/ES9121000418450200051332/reports/2026-09
+
+### Groceries in September
+GET http://localhost:8080/api/v1/accounts/ES9121000418450200051332/transactions?month=2026-09&category=GROCERIES
+
+### Reconciliation result
+GET http://localhost:8080/api/v1/expected-payments?accountId=ES9121000418450200051332

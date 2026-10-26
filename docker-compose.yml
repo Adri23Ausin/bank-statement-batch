@@ -15,5 +15,33 @@ services:
       timeout: 3s
       retries: 10
 
+  statement-batch:
+    build: .
+    image: bank-statement-batch:latest
+    profiles: ["app"]
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/statements
+      DB_USERNAME: statements
+      DB_PASSWORD: statements
+      INBOX_DIR: /app/inbox
+      INBOX_POLLING: "true"
+      REPORTS_DIR: /app/reports
+    volumes:
+      - inbox:/app/inbox
+      - reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
 volumes:
   statements-data:
+  inbox:
+  reports:
